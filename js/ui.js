@@ -320,6 +320,61 @@ function buildLeagueFinalHTML() {
   `;
 }
 
+/* ============================================================
+   PÓDIO (compartilhado campeonato + copa)
+   ============================================================ */
+
+/**
+ * Renderiza o pódio.
+ * @param {Array} places — [{ name, team, medal }] em ordem [1º, 2º, 3º]
+ *                         (o 3º pode não existir)
+ * @param {string} [subtitle]
+ * @returns {string} HTML
+ */
+function renderPodium(places, subtitle) {
+  if (!places || places.length === 0) {
+    return `
+      <div class="podium-section">
+        <div class="podium-title">🏆 Pódio 🏆</div>
+        <div class="pending" style="text-align:center;padding:20px">
+          ⏳ O pódio será revelado quando o torneio terminar.
+        </div>
+      </div>
+    `;
+  }
+
+  const hasThree = places.length >= 3;
+  const [p1, p2, p3] = places;
+
+  // Ordem visual: 2º à esquerda, 1º no centro, 3º à direita
+  const order = hasThree
+    ? [{ place: p2, cls: 'p2' }, { place: p1, cls: 'p1' }, { place: p3, cls: 'p3' }]
+    : [{ place: p2, cls: 'p2' }, { place: p1, cls: 'p1' }];
+
+  const medals = { p1: '🥇', p2: '🥈', p3: '🥉' };
+
+  const placesHtml = order.map(({ place, cls }) => {
+    if (!place) return '';
+    const teamName = place.team ? place.team.name : '';
+    return `
+      <div class="podium-place ${cls}">
+        <div class="medal">${medals[cls]}</div>
+        <div class="avatar">${teamIconHtml(place.team, 'big')}</div>
+        <div class="pname">${escapeHtml(place.name)}</div>
+        <div class="tname">${escapeHtml(teamName)}</div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="podium-section">
+      <div class="podium-title">🏆 Pódio 🏆</div>
+      ${subtitle ? `<div class="pending" style="text-align:center;margin-bottom:12px">${escapeHtml(subtitle)}</div>` : ''}
+      <div class="podium-podium">${placesHtml}</div>
+    </div>
+  `;
+}
+
 function buildLeagueChampionHTML() {
   const f = state.campeonato.final;
   if (f.hs === null || f.as === null) return '';
@@ -333,15 +388,24 @@ function buildLeagueChampionHTML() {
     </div>`;
   }
 
+  // Monta o pódio: 1º e 2º vêm da final, 3º vem da classificação geral
   const winnerIdx = f.hs > f.as ? f.home : f.away;
-  const W = state.campeonato.players[winnerIdx];
+  const loserIdx  = f.hs > f.as ? f.away : f.home;
 
-  return `<div class="champion">
-    <div class="trophy">🏆</div>
-    <div class="title">Campeão</div>
-    <div class="name">${escapeHtml(W.name)}</div>
-    <div class="team">${escapeHtml(W.team.name)}</div>
-  </div>`;
+  const standings = computeStandings(state.campeonato.players, state.campeonato.matches);
+  const third = standings.find(t => t.idx !== winnerIdx && t.idx !== loserIdx);
+
+  const W = state.campeonato.players[winnerIdx];
+  const L = state.campeonato.players[loserIdx];
+  const T = third ? state.campeonato.players[third.idx] : null;
+
+  const places = [
+    { name: W.name, team: W.team },
+    { name: L.name, team: L.team },
+  ];
+  if (T) places.push({ name: T.name, team: T.team });
+
+  return renderPodium(places, 'Campeonato — Resultado Final');
 }
 
 /* ============================================================
@@ -432,14 +496,16 @@ function renderCopaChampion() {
   if (!el) return;
 
   const champ = getChampion(state.copa.rounds);
-  el.innerHTML = champ
-    ? `<div class="champion" style="margin-top:24px">
-         <div class="trophy">🏆</div>
-         <div class="title">Campeão</div>
-         <div class="name">${escapeHtml(champ.name)}</div>
-         <div class="team">Copa do Mundo</div>
-       </div>`
-    : '';
+  if (!champ) { el.innerHTML = ''; return; }
+
+  // Na copa só temos o campeão definido pelo bracket.
+  // Se quiser 2º e 3º, precisaria de disputa de 3º lugar.
+  // Por ora, só o 1º:
+  const places = [
+    { name: 'Campeão', team: champ },
+  ];
+
+  el.innerHTML = renderPodium(places, 'Copa do Mundo — Resultado Final');
 }
 
 /* ============================================================
