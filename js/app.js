@@ -50,6 +50,8 @@ function pickTeam(t) {
   saveState();
   renderPlayersSetup();
   closeTeamModal();
+
+  updateStartButton();
   showToast(`✅ ${t.name} escolhido!`);
 }
 
